@@ -1,12 +1,13 @@
 import { createContext } from "react";
-import { useReducer } from "react";
+import { useReducer, useState, useEffect } from "react";
 
 
 
 export const PostList = createContext({
     postList: [],
     addPost: () => {},
-    deletePost: () => {}
+    deletePost: () => {},
+    fetchok: false,
 });
 
 const PostListReducer = (currPostList, action) => {
@@ -18,22 +19,35 @@ const PostListReducer = (currPostList, action) => {
     }
     else if(action.type === "ADD_POST") {
         newPostList = [action.payload, ...currPostList];
+    } 
+    else if(action.type === "ADD_INITIAL_POST") {
+        newPostList = action.payload;
     }
     return newPostList;
 }
 
 const PostListProvider = ({ children }) => {
 
-    const [postList,dispatchPostList] = useReducer(PostListReducer,DEFAULT_POST_LIST);
-    const addPost = (userId, title, body, reactions, tags) => {
+    const [postList,dispatchPostList] = useReducer(PostListReducer,[]);
+    const [fetchok, setFetch] = useState(false);
+    
+    const addPost = (userId, title, body, views, tags) => {
         dispatchPostList({type: "ADD_POST", payload: {
             id: Date.now(),
             userId,
             title,
             body,
-            reactions,
+            reactions: {
+                likes: 0,
+                dislikes: 0
+            },
+            views,
             tags
         }});
+    }
+
+    const addInitialPosts = (posts) => {
+        dispatchPostList({type: "ADD_INITIAL_POST", payload: posts});
     }
 
     const deletePost = (postId) => {
@@ -41,32 +55,40 @@ const PostListProvider = ({ children }) => {
     }
 
 
+    useEffect(() => {
+        const controller = new AbortController();
+        const signal = controller.signal;
+
+        const fetchPosts = async () => {
+            try {
+                setFetch(true);
+                const response = await fetch('https://dummyjson.com/posts', { signal });
+                const data = await response.json();
+                addInitialPosts(data.posts);
+                setFetch(false);
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error('Fetch error:', error);
+                }
+                setFetch(false);
+            }
+        };
+
+        fetchPosts();
+
+        return () => {
+            controller.abort();
+        };
+    },[])
+
     return <PostList.Provider value={{
         postList,
         addPost,
-        deletePost
+        deletePost,
+        fetchok
     }}>
         {children}
     </PostList.Provider>
 }
-
-const DEFAULT_POST_LIST = [
-    {
-        id: 1,
-        title: "Going to Mumbai",
-        body: "Hi Friends, I am going to mumbai for vecation",
-        reactions: 2,
-        userId: "user-1",
-        tags: ["Vacation", "Mumbai","Enjoy"]
-    },
-    {
-        id: 2,
-        title: "B-Tech Pass",
-        body: "Hi Friends, I successfully completed my B-Tech",
-        reactions: 5,
-        userId: "user-2",
-        tags: ["Happy", "B-Tech","Enjoy"]
-    }
-]
 
 export default PostListProvider;
